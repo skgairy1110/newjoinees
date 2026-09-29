@@ -99,8 +99,8 @@ export function Login() {
           <svg className="mark" viewBox="0 0 100 110"><path d="M35 0h22L47 40l45 25-22 45H0l14-30 20 4z" fill="#0f0f11" /></svg>
           <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
           <p className="sub">{mode === 'in' ? 'Sign in to access your saved projects.' : 'Sign up to start saving projects.'}</p>
-          <button type="button" className="demo" onClick={() => go('demo@botlab.app', 'demo1234', 'in')}><i /> Try the demo account</button>
-          <div className="hint">Signs you in as <b>demo@botlab.app</b> · password <b>demo1234</b></div>
+          <button type="button" className="demo" onClick={() => go('demo@test.app', 'demo1234', 'in')}><i /> Try the demo account</button>
+          <div className="hint">Signs you in as <b>demo@test.app</b> · password <b>demo1234</b></div>
           <div className="or"><span>OR CONTINUE WITH EMAIL</span></div>
           <label>EMAIL</label><input type="email" required placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} />
           <label>PASSWORD</label><input type="password" required minLength={6} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
