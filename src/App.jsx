@@ -96,8 +96,7 @@ export function Login() {
       </section>
       <section className="panel">
         <form onSubmit={e => { e.preventDefault(); go(email, password) }}>
-          <svg className="mark" viewBox="0 0 100 110"><path d="M5 20h15l12 42 18-24 18 24 12-42h15L78 80H64L50 58 36 80H22L5 20zM43 20a7 7 0 1 1 14 0a7 7 0 1 1-14 0zM36 38c0-8 6-12 14-12s14 4 14 12l-5 10-9-10-9 10z" fill="#0f0f11" /></svg>
-          <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
+<svg className="mark" viewBox="0 0 100 110"><path d="M8 22c0-5 4-9 9-9h12l11 38 10-14 10 14 11-38h12c5 0 9 4 9 9l-15 57c-1 4-5 7-9 7H62L50 69 38 86H31c-4 0-8-3-9-7L8 22zM42 20a8 8 0 1 1 16 0a8 8 0 1 1-16 0z" fill="#0f0f11" /></svg>          <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
           <p className="sub">{mode === 'in' ? 'Sign in to access your saved projects.' : 'Sign up to start saving projects.'}</p>
           <button type="button" className="demo" onClick={() => go('demo@test.app', 'demo1234', 'in')}><i /> Try the demo account</button>
           <div className="hint">Signs you in as <b>demo@test.app</b> · password <b>demo1234</b></div>
