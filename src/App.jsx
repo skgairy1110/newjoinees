@@ -86,17 +86,17 @@ export function Login() {
   return (
     <div className="login">
       <section className="hero">
-        <div className="brand">BOTLAB DYNAMICS</div>
+        <div className="brand">WelcomeHub</div>
         <div className="dots" />
         <div className="hero-copy">
-          <span className="pill"><i /> NEW JOINEE STUDIO</span>
+          <span className="pill"><i /> WELCOMEHUB STUDIO</span>
           <h1>From a name on a list to a <em>welcome</em> worth sharing.</h1>
           <p>Craft, save, and re-edit your team's welcome cards in one place — built for the BotLab swarm.</p>
         </div>
       </section>
       <section className="panel">
         <form onSubmit={e => { e.preventDefault(); go(email, password) }}>
-          <svg className="mark" viewBox="0 0 100 110"><path d="M35 0h22L47 40l45 25-22 45H0l14-30 20 4z" fill="#0f0f11" /></svg>
+          <svg className="mark" viewBox="0 0 100 110"><path d="M5 20h15l12 42 18-24 18 24 12-42h15L78 80H64L50 58 36 80H22L5 20zM43 20a7 7 0 1 1 14 0a7 7 0 1 1-14 0zM36 38c0-8 6-12 14-12s14 4 14 12l-5 10-9-10-9 10z" fill="#0f0f11" /></svg>
           <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
           <p className="sub">{mode === 'in' ? 'Sign in to access your saved projects.' : 'Sign up to start saving projects.'}</p>
           <button type="button" className="demo" onClick={() => go('demo@test.app', 'demo1234', 'in')}><i /> Try the demo account</button>
