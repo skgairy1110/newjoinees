@@ -1,22 +1,4 @@
-{
-  "name": "newjoinees",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "html2canvas": "^1.4.1",
-    "papaparse": "^5.4.1"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.1",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.2"
-  }
-}
+{"name":"botlab-joinee-cards","private":true,"version":"1.0.0","type":"module",
+"scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},
+"dependencies":{"@supabase/supabase-js":"^2.45.0","html-to-image":"^1.11.11","react":"^18.3.1","react-dom":"^18.3.1"},
+"devDependencies":{"@vitejs/plugin-react":"^4.3.1","vite":"^5.4.0"}}
