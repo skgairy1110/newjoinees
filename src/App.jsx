@@ -74,13 +74,37 @@ function parseCsv(text) {
 }
 
 /* ---------------- Login ---------------- */
-export function Login() {
-  const [mode, setMode] = useState('in'), [email, setEmail] = useState(''), [password, setPassword] = useState('')
-  const [msg, setMsg] = useState(''), [busy, setBusy] = useState(false)
+export function Login({ recovery = false, onRecoveryComplete }) {
+  const [mode, setMode] = useState(recovery ? 'recovery' : 'in'), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirmPassword, setConfirmPassword] = useState('')
+  const [msg, setMsg] = useState(''), [msgSuccess, setMsgSuccess] = useState(false), [busy, setBusy] = useState(false)
+  useEffect(() => { if (recovery) setMode('recovery') }, [recovery])
   async function go(e, p, m = mode) {
-    setBusy(true); setMsg('')
+    setBusy(true); setMsg(''); setMsgSuccess(false)
     const { data, error } = m === 'in' ? await supabase.auth.signInWithPassword({ email: e, password: p }) : await supabase.auth.signUp({ email: e, password: p })
     if (error) setMsg(error.message); else if (m === 'up' && !data.session) setMsg('Check your inbox to confirm your email.')
+    setBusy(false)
+  }
+  async function resetPassword() {
+    setBusy(true); setMsg(''); setMsgSuccess(false)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
+    if (error) setMsg(error.message)
+    else {
+      setMsg('If an account exists for this email, a password reset link has been sent.')
+      setMsgSuccess(true)
+    }
+    setBusy(false)
+  }
+  async function updatePassword() {
+    if (password !== confirmPassword) { setMsg('Passwords do not match.'); setMsgSuccess(false); return }
+    setBusy(true); setMsg(''); setMsgSuccess(false)
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) setMsg(error.message)
+    else {
+      setMsg('Your password has been updated.')
+      setMsgSuccess(true)
+      setMode('in')
+      onRecoveryComplete?.()
+    }
     setBusy(false)
   }
   return (
@@ -95,17 +119,23 @@ export function Login() {
         </div>
       </section>
       <section className="panel">
-        <form onSubmit={e => { e.preventDefault(); go(email, password) }}>
-<svg className="mark" viewBox="0 0 100 110"><path d="M8 22c0-5 4-9 9-9h12l11 38 10-14 10 14 11-38h12c5 0 9 4 9 9l-15 57c-1 4-5 7-9 7H62L50 69 38 86H31c-4 0-8-3-9-7L8 22zM42 20a8 8 0 1 1 16 0a8 8 0 1 1-16 0z" fill="#0f0f11" /></svg>          <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
-          <p className="sub">{mode === 'in' ? 'Sign in to access your saved projects.' : 'Sign up to start saving projects.'}</p>
-          <button type="button" className="demo" onClick={() => go('demo@test.app', 'demo1234', 'in')}><i /> Try the demo account</button>
-          <div className="hint">Signs you in as <b>demo@test.app</b> · password <b>demo1234</b></div>
-          <div className="or"><span>OR CONTINUE WITH EMAIL</span></div>
-          <label>EMAIL</label><input type="email" required placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} />
-          <label>PASSWORD</label><input type="password" required minLength={6} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
-          {msg && <div className="err">{msg}</div>}
-          <button className="primary" disabled={busy}>{mode === 'in' ? 'Sign in' : 'Sign up'}</button>
-          <p className="switch">{mode === 'in' ? "Don't have an account? " : 'Already have an account? '}<a onClick={() => setMode(mode === 'in' ? 'up' : 'in')}>{mode === 'in' ? 'Sign up' : 'Sign in'}</a></p>
+        <form onSubmit={e => { e.preventDefault(); mode === 'reset' ? resetPassword() : mode === 'recovery' ? updatePassword() : go(email, password) }}>
+          <h2>{mode === 'in' ? 'Welcome back' : mode === 'up' ? 'Create your account' : mode === 'recovery' ? 'Choose a new password' : 'Reset your password'}</h2>
+          <p className="sub">{mode === 'in' ? 'Sign in to access your saved projects.' : mode === 'up' ? 'Sign up to start saving projects.' : mode === 'recovery' ? 'Choose a new password for your account.' : 'Enter your email and we’ll send you a password reset link.'}</p>
+          {mode !== 'reset' && mode !== 'recovery' && <>
+            <button type="button" className="demo" disabled={busy} onClick={() => go('demo@test.app', 'demo1234', 'in')}><i /> Try the demo account</button>
+            <div className="hint">Signs you in as <b>demo@test.app</b> · password <b>demo1234</b></div>
+            <div className="or"><span>OR CONTINUE WITH EMAIL</span></div>
+          </>}
+          {mode !== 'recovery' && <><label>EMAIL</label><input type="email" required placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} /></>}
+          {mode !== 'reset' && <>
+            <label>{mode === 'recovery' ? 'NEW PASSWORD' : 'PASSWORD'}</label><input type="password" required minLength={6} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+          </>}
+          {mode === 'recovery' && <><label>CONFIRM NEW PASSWORD</label><input type="password" required minLength={6} placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></>}
+          {msg && <div className={msgSuccess ? 'notice' : 'err'} role="status">{msg}</div>}
+          <button className="primary" disabled={busy}>{mode === 'reset' ? 'Send reset link' : mode === 'recovery' ? 'Update password' : mode === 'in' ? 'Sign in' : 'Sign up'}</button>
+          {mode === 'in' && <p className="forgot"><a onClick={() => { setMsg(''); setMsgSuccess(false); setMode('reset') }}>Forgot password?</a></p>}
+          {mode !== 'recovery' && <p className="switch">{mode === 'reset' ? <a onClick={() => { setMsg(''); setMsgSuccess(false); setMode('in') }}>Back to sign in</a> : <>{mode === 'in' ? "Don't have an account? " : 'Already have an account? '}<a onClick={() => { setMsg(''); setMsgSuccess(false); setMode(mode === 'in' ? 'up' : 'in') }}>{mode === 'in' ? 'Sign up' : 'Sign in'}</a></>}</p>}
           <p className="copy">© Developed by <a href="https://www.gairystudio.com" target="_blank" rel="noopener noreferrer">Gairy Studio</a> · All rights reserved</p>
         </form>
       </section>
