@@ -11,11 +11,11 @@ const stack = f => `'${f}',-apple-system,'Segoe UI',Helvetica,Arial,sans-serif`
 const fontHref = f => `https://fonts.googleapis.com/css2?family=${f.replace(/ /g, '+')}:wght@400;500;600;700&display=swap`
 const fontLinks = m => [...new Set([m.headingFont, m.bodyFont])].map(f => `<link href="${fontHref(f)}" rel="stylesheet"/>`).join('')
 const loadFonts = s => { const m = { ...styleDef, ...s }; [m.headingFont, m.bodyFont].forEach(f => { const id = 'gf-' + f.replace(/ /g, '-'); if (!document.getElementById(id)) { const l = document.createElement('link'); l.id = id; l.rel = 'stylesheet'; l.href = fontHref(f); document.head.appendChild(l) } }) }
-const footerDef = { followText: 'Follow us on:', instagram: 'https://www.instagram.com/botlabdynamics', linkedin: 'https://www.linkedin.com/company/botlabdynamics', x: 'https://x.com/botlabdynamics', youtube: 'https://www.youtube.com/@botlabdynamics',
-  about: "We are BotLab Dynamics - India's leading drone show company based in New Delhi, with 7x Guinness World Records and a portfolio of 500+ drone shows. We've performed at Global Summits, Stadium Finales, Tourism Festivals, and National Celebrations like Mahakumbh 2025, Filmfare, IIFA, IPL, ICC Women's World Cup, Mysuru Dasara, Ayodhya Deepotsav, and more.",
-  moreText: 'know more log on to', website: 'www.botlabdynamics.com' }
+const footerDef = { followText: 'Follow us on:', instagram: '', linkedin: '', x: '', youtube: '',
+  about: 'We are excited to welcome new teammates and celebrate the fresh perspectives, skills, and ideas they bring. We look forward to learning, growing, and achieving great things together.',
+  moreText: 'Learn more at', website: 'www.yourcompany.com' }
 const starter = () => ({ ...footerDef, ...styleDef,
-  logo: '', logoText: 'BOTLAB DYNAMICS', greeting: 'Hey Team,',
+  logo: '', logoText: 'NEW JOINEES', greeting: 'Hey Team,',
   intro: "We're excited to introduce some new faces to our Swarm!\nThey bring a wealth of experience, fresh perspectives, and unique skills that will surely propel us forward. So, let's give a warm welcome to our new colleagues!",
   people: [
     { name: 'Sourabh Verma', designation: 'Unreal Engine Specialist', department: 'Animation', bio: 'Supports Unreal Engine development, contributes to scene design and optimization, assists with testing and debugging, and helps ensure applications are deployment-ready for projects.', image: '' },
@@ -115,7 +115,7 @@ export function Login({ recovery = false, onRecoveryComplete }) {
         <div className="hero-copy">
           <span className="pill"><i /> NEWJOINEES</span>
           <h1>From a name on a list to a <em>welcome</em> worth sharing.</h1>
-          <p>Craft, save, and re-edit your team's welcome cards in one place — built for the BotLab swarm.</p>
+          <p>Craft, save, and re-edit your team's welcome cards in one place — built for the Corporate swarm.</p>
         </div>
       </section>
       <section className="panel">
