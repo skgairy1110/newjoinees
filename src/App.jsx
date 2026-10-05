@@ -86,10 +86,10 @@ export function Login() {
   return (
     <div className="login">
       <section className="hero">
-        <div className="brand">WelcomeHub</div>
+        <div className="brand">NewJoinees</div>
         <div className="dots" />
         <div className="hero-copy">
-          <span className="pill"><i /> WELCOMEHUB STUDIO</span>
+          <span className="pill"><i /> NEWJOINEES</span>
           <h1>From a name on a list to a <em>welcome</em> worth sharing.</h1>
           <p>Craft, save, and re-edit your team's welcome cards in one place — built for the BotLab swarm.</p>
         </div>
@@ -106,7 +106,7 @@ export function Login() {
           {msg && <div className="err">{msg}</div>}
           <button className="primary" disabled={busy}>{mode === 'in' ? 'Sign in' : 'Sign up'}</button>
           <p className="switch">{mode === 'in' ? "Don't have an account? " : 'Already have an account? '}<a onClick={() => setMode(mode === 'in' ? 'up' : 'in')}>{mode === 'in' ? 'Sign up' : 'Sign in'}</a></p>
-          <p className="copy">© BotLab Dynamics · All rights reserved</p>
+          <p className="copy">© Developed by <a href="https://www.gairystudio.com" target="_blank" rel="noopener noreferrer">Gairy Studio</a> · All rights reserved</p>
         </form>
       </section>
     </div>
