@@ -16,6 +16,7 @@ input,textarea,button{font:inherit;color:inherit}a{cursor:pointer;text-decoratio
 .hero p{margin:0;color:#e4e4e7;font-size:15px;max-width:26em;line-height:1.6}
 .panel{background:#fafaf9;display:flex;align-items:center;justify-content:center;padding:32px;position:relative}
 .panel form{width:100%;max-width:360px}
+.login-logo{display:block;width:min(140px,80%);height:auto;padding:6px;margin:0 0 28px;background:transparent;border-radius:8px}
 .mark{width:34px;height:34px;margin-bottom:28px;display:block}
 .panel h2{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 6px}.sub{color:var(--mut);margin:0 0 28px}
 .panel label{display:block;font-size:12px;font-weight:500;color:#3f3f46;margin:0 0 6px}
@@ -33,7 +34,7 @@ input,textarea,button{font:inherit;color:inherit}a{cursor:pointer;text-decoratio
 @media(max-width:900px){.login{grid-template-columns:1fr}.hero{display:none}}
 /* ---------- dashboard ---------- */
 .dash header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 32px;background:#ffffffe6;backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.dash h1{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}.dash header small{color:var(--mut);font-size:12px}
+.dashboard-logo{display:block;width:148px;height:auto;margin:0 0 4px}.dash header small{color:var(--mut);font-size:12px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .dash button{height:34px;padding:0 14px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:.15s}
 .dash button:hover{border-color:#a1a1aa}.dash button.fill{background:var(--ink);border-color:var(--ink);color:#fff}.dash button.fill:hover{background:#27272a}

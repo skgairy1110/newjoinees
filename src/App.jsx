@@ -110,7 +110,7 @@ export function Login({ recovery = false, onRecoveryComplete }) {
   return (
     <div className="login">
       <section className="hero">
-        <div className="brand">NewJoinees</div>
+        <div className="brand"></div>
         <div className="dots" />
         <div className="hero-copy">
           <span className="pill"><i /> NEWJOINEES</span>
@@ -120,6 +120,7 @@ export function Login({ recovery = false, onRecoveryComplete }) {
       </section>
       <section className="panel">
         <form onSubmit={e => { e.preventDefault(); mode === 'reset' ? resetPassword() : mode === 'recovery' ? updatePassword() : go(email, password) }}>
+          <img className="login-logo" src="/images/newjoinees-logo.png" alt="NewJoinees" />
           <h2>{mode === 'in' ? 'Welcome back' : mode === 'up' ? 'Create your account' : mode === 'recovery' ? 'Choose a new password' : 'Reset your password'}</h2>
           <p className="sub">{mode === 'in' ? 'Sign in to access your saved projects.' : mode === 'up' ? 'Sign up to start saving projects.' : mode === 'recovery' ? 'Choose a new password for your account.' : 'Enter your email and we’ll send you a password reset link.'}</p>
           {mode !== 'reset' && mode !== 'recovery' && <>
@@ -223,7 +224,7 @@ export function Dashboard({ user }) {
   return (
     <div className="dash">
       <header>
-        <div><h1>New Joinee Card Generator</h1><small>Signed in as {user.email}{dbOk && ' · Connected to Supabase'}</small></div>
+        <div><img className="dashboard-logo" src="/images/newjoinees-logo.png" alt="NewJoinees" /><small>Signed in as {user.email}{dbOk && ' · Connected to Supabase'}</small></div>
         <div className="actions">
           <span className="status">{saving.current ? 'Saving…' : dirty ? 'Unsaved changes' : status || 'Auto-save on'}</span>
           <input className="pname" value={name} onChange={e => setName(e.target.value)} />
