@@ -148,9 +148,14 @@ export function Login({ recovery = false, onRecoveryComplete }) {
 export function Dashboard({ user }) {
   const [s, setS] = useState(starter), [name, setName] = useState('Untitled project'), [id, setId] = useState(null)
   const [projects, setProjects] = useState([]), [toast, setToast] = useState('')
+  const [sharing, setSharing] = useState(null), [shareEmail, setShareEmail] = useState(''), [sharedWith, setSharedWith] = useState([]), [sharingBusy, setSharingBusy] = useState(false)
   const ref = useRef(), csvRef = useRef()
   const flash = t => { setToast(t); setTimeout(() => setToast(''), 2200) }
-  const load = async () => { const { data } = await supabase.from('projects').select('id,name,data,updated_at').order('updated_at', { ascending: false }); setProjects(data || []) }
+  const load = async () => {
+    const { data, error } = await supabase.from('projects').select('id,name,data,updated_at,user_id').order('updated_at', { ascending: false })
+    if (error) return flash(error.message)
+    setProjects(data || [])
+  }
   useEffect(() => { load() }, [])
 
   const set = (k, v) => setS(x => ({ ...x, [k]: v }))
@@ -176,11 +181,12 @@ export function Dashboard({ user }) {
     const q = id ? supabase.from('projects').update(row).eq('id', id).select().single() : supabase.from('projects').insert(row).select().single()
     const { data, error } = await q
     saving.current = false
-    if (error) { setStatus('Save failed'); return flash(error.message) }
+    if (error) { setStatus('Save failed'); flash(error.message); return false }
     L.current.id = data.id; setId(data.id); lastSaved.current = snap
     setStatus((silent ? 'Auto-saved ' : 'Saved ') + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
     if (!silent) flash('Saved')
     load()
+    return true
   }
   // auto-save every 10 seconds when there are unsaved changes
   useEffect(() => { const t = setInterval(() => { const c = L.current; if (JSON.stringify({ s: c.s, name: c.name }) !== lastSaved.current) save(true) }, 10000); return () => clearInterval(t) }, [])
@@ -210,7 +216,39 @@ export function Dashboard({ user }) {
   const newProject = () => { const n = starter(); setS(n); setName('Untitled project'); setId(null); lastSaved.current = JSON.stringify({ s: n, name: 'Untitled project' }); setStatus('') }
   const edit = p => { setS(p.data); setName(p.name); setId(p.id); lastSaved.current = JSON.stringify({ s: p.data, name: p.name }); setStatus(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }
   const dup = async p => { const { error } = await supabase.from('projects').insert({ name: p.name + ' (copy)', data: p.data }); if (error) return flash(error.message); flash('Duplicated'); load() }
-  const del = async p => { if (!confirm(`Delete "${p.name}"?`)) return; await supabase.from('projects').delete().eq('id', p.id); if (p.id === id) newProject(); load() }
+  const del = async p => { if (!confirm(`Delete "${p.name}"?`)) return; const { error } = await supabase.from('projects').delete().eq('id', p.id); if (error) return flash(error.message); if (p.id === id) newProject(); load() }
+  const openShare = async p => {
+    if (JSON.stringify({ s: L.current.s, name: L.current.name }) !== lastSaved.current && p.id === id) {
+      const saved = await save(false)
+      if (!saved) return
+      p = { ...p, id: L.current.id, name: L.current.name }
+    }
+    setShareEmail('')
+    setSharing(p)
+    const { data, error } = await supabase.from('project_shares').select('id,shared_with_email').eq('project_id', p.id).order('created_at')
+    if (error) { flash(error.message); setSharedWith([]); return }
+    setSharedWith(data || [])
+  }
+  const invite = async e => {
+    e.preventDefault()
+    if (!sharing) return
+    setSharingBusy(true)
+    const { error } = await supabase.rpc('share_project_with_email', { p_project_id: sharing.id, p_email: shareEmail.trim() })
+    setSharingBusy(false)
+    if (error) return flash(error.message)
+    flash('Project shared')
+    setShareEmail('')
+    const { data, error: listError } = await supabase.from('project_shares').select('id,shared_with_email').eq('project_id', sharing.id).order('created_at')
+    if (listError) return flash(listError.message)
+    setSharedWith(data || [])
+    load()
+  }
+  const revokeShare = async share => {
+    const { error } = await supabase.from('project_shares').delete().eq('id', share.id)
+    if (error) return flash(error.message)
+    setSharedWith(current => current.filter(item => item.id !== share.id))
+    flash('Access removed')
+  }
 
   async function copyEmail() {
     const html = cardHtml(s)
@@ -240,10 +278,15 @@ export function Dashboard({ user }) {
       {dbErr && <div className="banner">{dbErr}</div>}
       <main>
         <div className="left">
-          <div className="card"><div className="row"><h3>My Projects</h3><small>{projects.length} saved</small></div>
-            {projects.map(p => <div className="proj" key={p.id}><div><b>{p.name}</b><small>Updated {new Date(p.updated_at).toLocaleString('en-IN')}</small></div>
-              <div><button className="sm" onClick={() => edit(p)}>Edit</button> <button className="sm" onClick={() => dup(p)}>Duplicate</button> <button className="sm dark" onClick={() => del(p)}>Delete</button></div></div>)}
+          <div className="card"><div className="row"><h3>My Projects</h3><small>{projects.filter(p => p.user_id === user.id).length} saved</small></div>
+            {projects.filter(p => p.user_id === user.id).map(p => <div className="proj" key={p.id}><div><b>{p.name}</b><small>Updated {new Date(p.updated_at).toLocaleString('en-IN')}</small></div>
+              <div><button className="sm" onClick={() => edit(p)}>Edit</button> <button className="sm" onClick={() => openShare(p)}>Share</button> <button className="sm" onClick={() => dup(p)}>Duplicate</button> <button className="sm dark" onClick={() => del(p)}>Delete</button></div></div>)}
+            {!projects.some(p => p.user_id === user.id) && <small className="empty">No saved projects yet.</small>}
           </div>
+          {projects.some(p => p.user_id !== user.id) && <div className="card"><div className="row"><h3>Shared with me</h3><small>{projects.filter(p => p.user_id !== user.id).length} shared</small></div>
+            {projects.filter(p => p.user_id !== user.id).map(p => <div className="proj" key={p.id}><div><b>{p.name}</b><small>Shared project · Updated {new Date(p.updated_at).toLocaleString('en-IN')}</small></div>
+              <div><button className="sm" onClick={() => edit(p)}>Edit</button> <button className="sm" onClick={() => dup(p)}>Duplicate</button></div></div>)}
+            </div>}
           <div className="card"><h3>Header</h3>
             <label>COMPANY LOGO (IMAGE)</label>
             <div className="logo-row"><div className="logo-box">{s.logo ? <img src={s.logo} /> : 'No logo'}</div>
@@ -280,6 +323,17 @@ export function Dashboard({ user }) {
         </div>
         <div className="right"><div className="lp">LIVE PREVIEW</div><div className="stage"><div ref={ref} className="preview" dangerouslySetInnerHTML={{ __html: cardHtml(s) }} /></div></div>
       </main>
+      {sharing && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSharing(null) }}>
+        <section className="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+          <div className="row"><h3 id="share-title">Share “{sharing.name}”</h3><button className="sm dark" onClick={() => setSharing(null)}>Close</button></div>
+          <p className="share-help">Invite someone with an existing NewJoinees account. They’ll be able to view and edit this project.</p>
+          <form onSubmit={invite}><label htmlFor="share-email">EMAIL ADDRESS</label>
+            <div className="share-form"><input id="share-email" type="email" required value={shareEmail} onChange={e => setShareEmail(e.target.value)} placeholder="teammate@company.com" />
+              <button className="fill" disabled={sharingBusy}>{sharingBusy ? 'Sharing…' : 'Share'}</button></div></form>
+          <h4>People with access</h4>
+          {sharedWith.length ? <ul className="share-list">{sharedWith.map(share => <li key={share.id}><span>{share.shared_with_email}</span><button className="sm dark" onClick={() => revokeShare(share)}>Remove</button></li>)}</ul> : <p className="empty">Only you have access to this project.</p>}
+        </section>
+      </div>}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

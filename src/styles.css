@@ -61,6 +61,14 @@ main{display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:28px;p
 .stage{background:#ecebe8;border-radius:16px;padding:32px 20px;display:flex;justify-content:center}
 .preview{width:600px;max-width:100%;box-shadow:0 20px 50px #0000002b}.preview>table{width:100%!important}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:20}
+.empty{display:block;color:var(--mut);font-size:12px;padding:8px 0}
+.modal-backdrop{position:fixed;inset:0;z-index:30;background:#0008;display:flex;align-items:center;justify-content:center;padding:20px}
+.share-modal{width:min(100%,480px);max-height:90vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 24px 70px #0003}
+.share-modal .row{margin-bottom:8px}.share-modal h3{font-size:16px}.share-modal h4{font-size:13px;margin:22px 0 8px}
+.share-help{font-size:13px;color:var(--mut);margin:0 0 16px}
+.share-modal label{display:block;font-size:11px;font-weight:500;letter-spacing:.06em;color:var(--mut);margin:0 0 6px}
+.share-form{display:flex;gap:8px}.share-form input{flex:1;min-width:0;background:var(--in);border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:13px;outline:0}.share-form input:focus{border-color:var(--ink)}
+.share-form button{flex:none}.share-list{list-style:none;margin:0;padding:0}.share-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);padding:10px 0;font-size:13px}
 @media(max-width:1000px){main{grid-template-columns:1fr;padding:16px}.right{position:static}.dash header{padding:12px 16px}}
 .card select{width:100%;background:var(--in);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13.5px;outline:0}.card select:focus{border-color:var(--ink)}
 .colr{display:flex;gap:8px}.card .colr input[type=color]{flex:none;width:40px;height:38px;padding:3px;cursor:pointer}
