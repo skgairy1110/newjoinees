@@ -47,7 +47,8 @@ create policy "shared project edit" on public.projects for update
       and project_shares.owner_id = projects.user_id
   ));
 
-create or replace function public.share_project_with_email(p_project_id uuid, p_email text)
+drop function if exists public.share_project_with_email(uuid, text);
+create function public.share_project_with_email(p_project_id uuid, p_email text)
 returns void
 language plpgsql
 security definer
@@ -104,3 +105,5 @@ create policy "upload own photos" on storage.objects for insert to authenticated
 drop policy if exists "update own photos" on storage.objects;
 create policy "update own photos" on storage.objects for update to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+notify pgrst, 'reload schema';
