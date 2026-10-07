@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /projects/{projectId} {
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow read: if signedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        exists(/databases/$(database)/documents/project_shares/$(projectId + '_' + request.auth.uid))
+      );
+      allow update: if signedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        exists(/databases/$(database)/documents/project_shares/$(projectId + '_' + request.auth.uid))
+      );
+      allow delete: if signedIn() && resource.data.user_id == request.auth.uid;
+    }
+
+    match /project_shares/{shareId} {
+      allow read: if signedIn() && (resource.data.owner_id == request.auth.uid || resource.data.user_id == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.owner_id == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(request.resource.data.project_id)).data.user_id == request.auth.uid;
+      allow update: if signedIn() && resource.data.owner_id == request.auth.uid;
+      allow delete: if signedIn() && resource.data.owner_id == request.auth.uid;
+    }
+  }
+}

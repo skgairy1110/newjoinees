@@ -1,17 +1,22 @@
-# BotLab · New Joinee Card Generator
+# NewJoinees
 
-## Connect Supabase (local)
-1. supabase.com → New project. Then **SQL Editor** → paste all of `supabase.sql` → Run.
-2. **Project Settings → API**: copy *Project URL* and the **anon public** key (never the service_role key).
-3. Create `.env` in this folder (next to package.json):
-   ```
-   VITE_SUPABASE_URL=https://xxxx.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-public-key
-   ```
-4. **Restart** `npm run dev` (Vite reads .env only at startup). Open http://localhost:5173
-5. **Authentication → Providers → Email**: for local testing turn off "Confirm email" (or confirm via inbox).
-6. **Authentication → Users → Add user**: `demo@botlab.app` / `demo1234`, tick auto-confirm (powers the demo button).
-7. After login the header shows "Connected to Supabase". A red banner means a step above is missing.
+## Firebase Authentication setup
 
-## Deploy
-Vercel → import repo (Vite) → add the same two env vars → deploy. In Supabase → Authentication → URL Configuration add your Vercel URL.
+This Vite + React app uses Firebase Authentication only. It does not require Firestore, Firebase Storage, Realtime Database, or Firebase Hosting.
+
+1. Open Firebase Console → Project settings → Your apps.
+2. Copy the Web app configuration values.
+3. Create a `.env` file in the project root:
+
+```env
+VITE_FIREBASE_API_KEY=your-api-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+VITE_FIREBASE_APP_ID=your-app-id
+```
+
+4. In Firebase Console → Authentication → Sign-in method, enable Email/Password.
+5. Run `npm install` and `npm run dev`.
+
+Project editor data is kept locally in the browser so no project content is sent to Firebase. Firebase stores only the authentication account information.

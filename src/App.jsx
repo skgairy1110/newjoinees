@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toPng, toJpeg } from 'html-to-image'
-import { supabase } from './supabase'
+import { auth } from './lib/firebase'
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword, confirmPasswordReset, signOut } from 'firebase/auth'
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const nl = s => esc(s).replace(/\n/g, '<br/>')
@@ -80,30 +81,42 @@ export function Login({ recovery = false, onRecoveryComplete }) {
   useEffect(() => { if (recovery) setMode('recovery') }, [recovery])
   async function go(e, p, m = mode) {
     setBusy(true); setMsg(''); setMsgSuccess(false)
-    const { data, error } = m === 'in' ? await supabase.auth.signInWithPassword({ email: e, password: p }) : await supabase.auth.signUp({ email: e, password: p })
-    if (error) setMsg(error.message); else if (m === 'up' && !data.session) setMsg('Check your inbox to confirm your email.')
+    try {
+      if (m === 'in') await signInWithEmailAndPassword(auth, e, p)
+      else await createUserWithEmailAndPassword(auth, e, p)
+      if (m === 'up') {
+        setMsg('Your account has been created.')
+        setMsgSuccess(true)
+      }
+    } catch (error) {
+      setMsg(error?.message || 'Unable to complete this request.')
+    }
     setBusy(false)
   }
   async function resetPassword() {
     setBusy(true); setMsg(''); setMsgSuccess(false)
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
-    if (error) setMsg(error.message)
-    else {
+    try {
+      await sendPasswordResetEmail(auth, email, { url: window.location.origin })
       setMsg('If an account exists for this email, a password reset link has been sent.')
       setMsgSuccess(true)
+    } catch (error) {
+      setMsg(error?.message || 'Unable to send the password reset link.')
     }
     setBusy(false)
   }
   async function updatePassword() {
     if (password !== confirmPassword) { setMsg('Passwords do not match.'); setMsgSuccess(false); return }
     setBusy(true); setMsg(''); setMsgSuccess(false)
-    const { error } = await supabase.auth.updateUser({ password })
-    if (error) setMsg(error.message)
-    else {
+    try {
+      const oobCode = new URLSearchParams(window.location.search).get('oobCode')
+      if (!oobCode) throw new Error('This password reset link is invalid or has expired.')
+      await confirmPasswordReset(auth, oobCode, password)
       setMsg('Your password has been updated.')
       setMsgSuccess(true)
       setMode('in')
       onRecoveryComplete?.()
+    } catch (error) {
+      setMsg(error?.message || 'Unable to update your password.')
     }
     setBusy(false)
   }
@@ -151,10 +164,15 @@ export function Dashboard({ user }) {
   const [sharing, setSharing] = useState(null), [shareEmail, setShareEmail] = useState(''), [sharedWith, setSharedWith] = useState([]), [sharingBusy, setSharingBusy] = useState(false)
   const ref = useRef(), csvRef = useRef()
   const flash = t => { setToast(t); setTimeout(() => setToast(''), 2200) }
-  const load = async () => {
-    const { data, error } = await supabase.from('projects').select('id,name,data,updated_at,user_id').order('updated_at', { ascending: false })
-    if (error) return flash(error.message)
-    setProjects(data || [])
+  const storageKey = `newjoinees.projects.${user.id}`
+  const load = () => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      const saved = raw ? JSON.parse(raw) : []
+      setProjects(Array.isArray(saved) ? saved : [])
+    } catch {
+      setProjects([])
+    }
   }
   useEffect(() => { load() }, [])
 
@@ -165,90 +183,53 @@ export function Dashboard({ user }) {
   const setP = (i, k, v) => setS(x => ({ ...x, people: x.people.map((p, j) => j === i ? { ...p, [k]: v } : p) }))
   async function upload(file, cb) {
     if (!file) return
-    const path = `${user.id}/${Date.now()}-${file.name.replace(/[^\w.]/g, '_')}`
-    const { error } = await supabase.storage.from('photos').upload(path, file)
-    if (error) return flash(error.message)
-    cb(supabase.storage.from('photos').getPublicUrl(path).data.publicUrl)
+    try {
+      const reader = new FileReader()
+      reader.onload = () => cb(reader.result)
+      reader.onerror = () => flash('Unable to read the image')
+      reader.readAsDataURL(file)
+    } catch { flash('Unable to read the image') }
   }
   const L = useRef(), lastSaved = useRef(JSON.stringify({ s, name })), saving = useRef(false)
   L.current = { s, name, id }
   const [status, setStatus] = useState('')
-  async function save(silent) {
-    if (saving.current) return
+  function persist(list) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(list))
+      setProjects(list)
+      return true
+    } catch {
+      flash('Browser storage is full. Try removing a large image.')
+      return false
+    }
+  }
+  function save(silent) {
+    if (saving.current) return false
     saving.current = true; setStatus('Saving…')
-    const { s, name, id } = L.current, snap = JSON.stringify({ s, name })
-    const row = { name, data: s, updated_at: new Date().toISOString() }
-    const q = id ? supabase.from('projects').update(row).eq('id', id).select().single() : supabase.from('projects').insert(row).select().single()
-    const { data, error } = await q
+    const current = L.current
+    const snap = JSON.stringify({ s: current.s, name: current.name })
+    const now = new Date().toISOString()
+    const projectId = current.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const existing = (() => { try { const raw = localStorage.getItem(storageKey); return raw ? JSON.parse(raw) : [] } catch { return [] } })()
+    const project = { id: projectId, name: current.name, data: current.s, updated_at: now, user_id: user.id }
+    const next = existing.some(p => p.id === projectId) ? existing.map(p => p.id === projectId ? project : p) : [project, ...existing]
+    const ok = persist(next)
     saving.current = false
-    if (error) { setStatus('Save failed'); flash(error.message); return false }
-    L.current.id = data.id; setId(data.id); lastSaved.current = snap
+    if (!ok) { setStatus('Save failed'); return false }
+    L.current.id = projectId; setId(projectId); lastSaved.current = snap
     setStatus((silent ? 'Auto-saved ' : 'Saved ') + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
     if (!silent) flash('Saved')
-    load()
     return true
   }
-  // auto-save every 10 seconds when there are unsaved changes
   useEffect(() => { const t = setInterval(() => { const c = L.current; if (JSON.stringify({ s: c.s, name: c.name }) !== lastSaved.current) save(true) }, 10000); return () => clearInterval(t) }, [])
-  const [, tick] = useState(0)
-  // host the default PNG icons in Supabase Storage so they load in Gmail even when running on localhost
-  useEffect(() => { (async () => {
-    for (const n of ['instagram', 'linkedin', 'x', 'youtube']) {
-      const path = `${user.id}/icons/${n}.png`
-      hosted[n] = supabase.storage.from('photos').getPublicUrl(path).data.publicUrl
-      try {
-        const b = await (await fetch(`/icons/${n}.png`)).blob()
-        const r = await supabase.storage.from('photos').upload(path, b, { contentType: 'image/png' })
-        if (r.error && !/exist|duplicate/i.test(r.error.message)) delete hosted[n]
-      } catch { delete hosted[n] }
-    }
-    tick(x => x + 1)
-  })() }, [])
-  const [dbErr, setDbErr] = useState(''), [dbOk, setDbOk] = useState(false)
-  useEffect(() => { (async () => {
-    const a = await supabase.from('projects').select('id', { head: true, count: 'exact' })
-    if (a.error) return setDbErr(`Database not ready: ${a.error.message}. Run supabase.sql in the Supabase SQL Editor.`)
-    const b = await supabase.storage.from('photos').list('', { limit: 1 })
-    if (b.error) return setDbErr(`Storage not ready: ${b.error.message}. Run supabase.sql to create the "photos" bucket.`)
-    setDbOk(true)
-  })() }, [])
   const dirty = JSON.stringify({ s, name }) !== lastSaved.current
   const newProject = () => { const n = starter(); setS(n); setName('Untitled project'); setId(null); lastSaved.current = JSON.stringify({ s: n, name: 'Untitled project' }); setStatus('') }
   const edit = p => { setS(p.data); setName(p.name); setId(p.id); lastSaved.current = JSON.stringify({ s: p.data, name: p.name }); setStatus(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }
-  const dup = async p => { const { error } = await supabase.from('projects').insert({ name: p.name + ' (copy)', data: p.data }); if (error) return flash(error.message); flash('Duplicated'); load() }
-  const del = async p => { if (!confirm(`Delete "${p.name}"?`)) return; const { error } = await supabase.from('projects').delete().eq('id', p.id); if (error) return flash(error.message); if (p.id === id) newProject(); load() }
-  const openShare = async p => {
-    if (JSON.stringify({ s: L.current.s, name: L.current.name }) !== lastSaved.current && p.id === id) {
-      const saved = await save(false)
-      if (!saved) return
-      p = { ...p, id: L.current.id, name: L.current.name }
-    }
-    setShareEmail('')
-    setSharing(p)
-    const { data, error } = await supabase.from('project_shares').select('id,shared_with_email').eq('project_id', p.id).order('created_at')
-    if (error) { flash(error.message); setSharedWith([]); return }
-    setSharedWith(data || [])
-  }
-  const invite = async e => {
-    e.preventDefault()
-    if (!sharing) return
-    setSharingBusy(true)
-    const { error } = await supabase.rpc('share_project_with_email', { p_project_id: sharing.id, p_email: shareEmail.trim() })
-    setSharingBusy(false)
-    if (error) return flash(error.message)
-    flash('Project shared')
-    setShareEmail('')
-    const { data, error: listError } = await supabase.from('project_shares').select('id,shared_with_email').eq('project_id', sharing.id).order('created_at')
-    if (listError) return flash(listError.message)
-    setSharedWith(data || [])
-    load()
-  }
-  const revokeShare = async share => {
-    const { error } = await supabase.from('project_shares').delete().eq('id', share.id)
-    if (error) return flash(error.message)
-    setSharedWith(current => current.filter(item => item.id !== share.id))
-    flash('Access removed')
-  }
+  const dup = p => { const copy = { ...p, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: p.name + ' (copy)', updated_at: new Date().toISOString(), user_id: user.id }; const next = [copy, ...projects]; persist(next); flash('Duplicated') }
+  const del = p => { if (!confirm(`Delete "${p.name}"?`)) return; const next = projects.filter(x => x.id !== p.id); persist(next); if (p.id === id) newProject(); flash('Deleted') }
+  const openShare = p => { setShareEmail(''); setSharing(p); setSharedWith([]); flash('Project sharing requires a database and is not available in Auth-only mode') }
+  const invite = async e => { e.preventDefault(); flash('Project sharing requires a database and is not available in Auth-only mode') }
+  const revokeShare = async () => { flash('Project sharing requires a database and is not available in Auth-only mode') }
 
   async function copyEmail() {
     const html = cardHtml(s)
@@ -262,7 +243,7 @@ export function Dashboard({ user }) {
   return (
     <div className="dash">
       <header>
-        <div><img className="dashboard-logo" src="/images/newjoinees-logo.png" alt="NewJoinees" /><small>Signed in as {user.email}{dbOk && ' · Connected to Supabase'}</small></div>
+        <div><img className="dashboard-logo" src="/images/newjoinees-logo.png" alt="NewJoinees" /><small>Signed in as {user.email}</small></div>
         <div className="actions">
           <span className="status">{saving.current ? 'Saving…' : dirty ? 'Unsaved changes' : status || 'Auto-save on'}</span>
           <input className="pname" value={name} onChange={e => setName(e.target.value)} />
@@ -272,10 +253,9 @@ export function Dashboard({ user }) {
           <button onClick={() => download(new Blob([fullHtml(s)], { type: 'text/html' }), `${name}.html`)}>Export HTML</button>
           <button className="fill" onClick={() => img(toPng)}>Export PNG</button>
           <button className="fill" onClick={() => img(toJpeg)}>Export JPG</button>
-          <button className="dark" onClick={() => supabase.auth.signOut()}>Sign out</button>
+          <button className="dark" onClick={() => signOut(auth)}>Sign out</button>
         </div>
       </header>
-      {dbErr && <div className="banner">{dbErr}</div>}
       <main>
         <div className="left">
           <div className="card"><div className="row"><h3>My Projects</h3><small>{projects.filter(p => p.user_id === user.id).length} saved</small></div>
