@@ -97,13 +97,14 @@ export function Login({ recovery = false, onRecoveryComplete }) {
   async function resetPassword() {
     setBusy(true); setMsg(''); setMsgSuccess(false)
     try {
-      await sendPasswordResetEmail(auth, email, { url: window.location.origin })
-      setMsg('If an account exists for this email, a password reset link has been sent.')
+      await sendPasswordResetEmail(auth, email.trim(), { url: window.location.origin })
+      setMsg('If an account exists for this email, a reset link has been sent. Check your inbox and spam folder to finish resetting your password.')
       setMsgSuccess(true)
     } catch (error) {
       setMsg(error?.message || 'Unable to send the password reset link.')
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
   }
   async function updatePassword() {
     if (password !== confirmPassword) { setMsg('Passwords do not match.'); setMsgSuccess(false); return }
@@ -149,7 +150,7 @@ export function Login({ recovery = false, onRecoveryComplete }) {
           {mode === 'recovery' && <><label>CONFIRM NEW PASSWORD</label><input type="password" required minLength={6} placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></>}
           {msg && <div className={msgSuccess ? 'notice' : 'err'} role="status">{msg}</div>}
           <button className="primary" disabled={busy}>{mode === 'reset' ? 'Send reset link' : mode === 'recovery' ? 'Update password' : mode === 'in' ? 'Sign in' : 'Sign up'}</button>
-          {mode === 'in' && <p className="forgot"><a onClick={() => { setMsg(''); setMsgSuccess(false); setMode('reset') }}>Forgot password?</a></p>}
+          {mode === 'in' && <p className="forgot"><button type="button" disabled={busy} onClick={() => { setMsg(''); setMsgSuccess(false); setMode('reset') }}>Forgot password?</button></p>}
           {mode !== 'recovery' && <p className="switch">{mode === 'reset' ? <a onClick={() => { setMsg(''); setMsgSuccess(false); setMode('in') }}>Back to sign in</a> : <>{mode === 'in' ? "Don't have an account? " : 'Already have an account? '}<a onClick={() => { setMsg(''); setMsgSuccess(false); setMode(mode === 'in' ? 'up' : 'in') }}>{mode === 'in' ? 'Sign up' : 'Sign in'}</a></>}</p>}
           <p className="copy">© Developed by <a href="https://www.gairystudio.com" target="_blank" rel="noopener noreferrer">Gairy Studio</a> · All rights reserved</p>
         </form>
