@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { toPng, toJpeg } from 'html-to-image'
-import { auth } from './lib/firebase'
+import { auth, db } from './lib/firebase'
 import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword, confirmPasswordReset, signOut } from 'firebase/auth'
+import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore'
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const nl = s => esc(s).replace(/\n/g, '<br/>')
@@ -161,17 +162,32 @@ export function Login({ recovery = false, onRecoveryComplete }) {
 export function Dashboard({ user }) {
   const [s, setS] = useState(starter), [name, setName] = useState('Untitled project'), [id, setId] = useState(null)
   const [projects, setProjects] = useState([]), [toast, setToast] = useState('')
-  const [sharing, setSharing] = useState(null), [shareEmail, setShareEmail] = useState(''), [sharedWith, setSharedWith] = useState([]), [sharingBusy, setSharingBusy] = useState(false)
   const ref = useRef(), csvRef = useRef()
   const flash = t => { setToast(t); setTimeout(() => setToast(''), 2200) }
-  const storageKey = `newjoinees.projects.${user.id}`
-  const load = () => {
+  const storageKey = `newjoinees.projects.${user.uid}`
+  const legacyStorageKey = 'newjoinees.projects.undefined'
+  const load = async () => {
     try {
-      const raw = localStorage.getItem(storageKey)
-      const saved = raw ? JSON.parse(raw) : []
-      setProjects(Array.isArray(saved) ? saved : [])
-    } catch {
-      setProjects([])
+      const current = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const legacy = JSON.parse(localStorage.getItem(legacyStorageKey) || '[]')
+      if (!Array.isArray(current) || !Array.isArray(legacy)) throw new Error('Saved projects are not in the expected format.')
+      const saved = [...current, ...legacy]
+      const localProjects = [...new Map(saved.filter(project => project?.id).map(project => [
+        project.id,
+        { ...project, user_id: project.user_id || user.uid, local_only: true },
+      ])).values()]
+      if (legacy.length) {
+        localStorage.setItem(storageKey, JSON.stringify(localProjects))
+        localStorage.removeItem(legacyStorageKey)
+      }
+      setProjects(localProjects)
+      const owned = await getDocs(query(collection(db, 'projects'), where('user_id', '==', user.uid)))
+      const remoteProjects = owned.docs.map(project => ({ id: project.id, ...project.data() }))
+      const remoteIds = new Set(remoteProjects.map(project => project.id))
+      setProjects([...remoteProjects, ...localProjects.filter(project => !remoteIds.has(project.id))]
+        .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))))
+    } catch (error) {
+      flash(`Unable to load projects: ${error.message}`)
     }
   }
   useEffect(() => { load() }, [])
@@ -191,45 +207,76 @@ export function Dashboard({ user }) {
     } catch { flash('Unable to read the image') }
   }
   const L = useRef(), lastSaved = useRef(JSON.stringify({ s, name })), saving = useRef(false)
-  L.current = { s, name, id }
+  L.current = { s, name, id, local_only: projects.find(project => project.id === id)?.local_only }
   const [status, setStatus] = useState('')
-  function persist(list) {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(list))
-      setProjects(list)
-      return true
-    } catch {
-      flash('Browser storage is full. Try removing a large image.')
-      return false
+  function removeLocalProject(projectId) {
+    for (const key of [storageKey, legacyStorageKey]) {
+      try {
+        const raw = localStorage.getItem(key)
+        if (!raw) continue
+        const saved = JSON.parse(raw)
+        if (!Array.isArray(saved)) throw new Error('Saved projects are not in the expected format.')
+        localStorage.setItem(key, JSON.stringify(saved.filter(project => project.id !== projectId)))
+      } catch (error) {
+        flash(`Unable to update saved projects: ${error.message}`)
+      }
     }
   }
-  function save(silent) {
+  async function save(silent) {
     if (saving.current) return false
     saving.current = true; setStatus('Saving…')
-    const current = L.current
+    const current = { ...L.current }
     const snap = JSON.stringify({ s: current.s, name: current.name })
     const now = new Date().toISOString()
     const projectId = current.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    const existing = (() => { try { const raw = localStorage.getItem(storageKey); return raw ? JSON.parse(raw) : [] } catch { return [] } })()
-    const project = { id: projectId, name: current.name, data: current.s, updated_at: now, user_id: user.id }
-    const next = existing.some(p => p.id === projectId) ? existing.map(p => p.id === projectId ? project : p) : [project, ...existing]
-    const ok = persist(next)
-    saving.current = false
-    if (!ok) { setStatus('Save failed'); return false }
-    L.current.id = projectId; setId(projectId); lastSaved.current = snap
-    setStatus((silent ? 'Auto-saved ' : 'Saved ') + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-    if (!silent) flash('Saved')
-    return true
+    const project = { id: projectId, name: current.name, data: current.s, updated_at: now, user_id: user.uid }
+    try {
+      await setDoc(doc(db, 'projects', projectId), project)
+      if (current.local_only) removeLocalProject(projectId)
+      setProjects(currentProjects => [project, ...currentProjects.filter(item => item.id !== projectId)])
+      const editorStillMatches = L.current.id === current.id &&
+        JSON.stringify({ s: L.current.s, name: L.current.name }) === snap
+      if (editorStillMatches) {
+        L.current.id = projectId; setId(projectId); lastSaved.current = snap
+        setStatus((silent ? 'Auto-saved ' : 'Saved ') + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      }
+      if (!silent) flash('Saved')
+      return true
+    } catch (error) {
+      setStatus('Save failed')
+      flash(`Unable to save project: ${error.message}`)
+      return false
+    } finally {
+      saving.current = false
+    }
   }
   useEffect(() => { const t = setInterval(() => { const c = L.current; if (JSON.stringify({ s: c.s, name: c.name }) !== lastSaved.current) save(true) }, 10000); return () => clearInterval(t) }, [])
   const dirty = JSON.stringify({ s, name }) !== lastSaved.current
   const newProject = () => { const n = starter(); setS(n); setName('Untitled project'); setId(null); lastSaved.current = JSON.stringify({ s: n, name: 'Untitled project' }); setStatus('') }
   const edit = p => { setS(p.data); setName(p.name); setId(p.id); lastSaved.current = JSON.stringify({ s: p.data, name: p.name }); setStatus(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }
-  const dup = p => { const copy = { ...p, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: p.name + ' (copy)', updated_at: new Date().toISOString(), user_id: user.id }; const next = [copy, ...projects]; persist(next); flash('Duplicated') }
-  const del = p => { if (!confirm(`Delete "${p.name}"?`)) return; const next = projects.filter(x => x.id !== p.id); persist(next); if (p.id === id) newProject(); flash('Deleted') }
-  const openShare = p => { setShareEmail(''); setSharing(p); setSharedWith([]); flash('Project sharing requires a database and is not available in Auth-only mode') }
-  const invite = async e => { e.preventDefault(); flash('Project sharing requires a database and is not available in Auth-only mode') }
-  const revokeShare = async () => { flash('Project sharing requires a database and is not available in Auth-only mode') }
+  const dup = async p => {
+    const copy = { ...p, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: p.name + ' (copy)', updated_at: new Date().toISOString(), user_id: user.uid }
+    delete copy.local_only
+    try {
+      await setDoc(doc(db, 'projects', copy.id), copy)
+      setProjects(current => [copy, ...current])
+      flash('Duplicated')
+    } catch (error) {
+      flash(`Unable to duplicate project: ${error.message}`)
+    }
+  }
+  const del = async p => {
+    if (!confirm(`Delete "${p.name}"?`)) return
+    try {
+      if (!p.local_only) await deleteDoc(doc(db, 'projects', p.id))
+      if (p.local_only) removeLocalProject(p.id)
+      setProjects(current => current.filter(project => project.id !== p.id))
+      if (p.id === id) newProject()
+      flash('Deleted')
+    } catch (error) {
+      flash(`Unable to delete project: ${error.message}`)
+    }
+  }
 
   async function copyEmail() {
     const html = cardHtml(s)
@@ -258,15 +305,11 @@ export function Dashboard({ user }) {
       </header>
       <main>
         <div className="left">
-          <div className="card"><div className="row"><h3>My Projects</h3><small>{projects.filter(p => p.user_id === user.id).length} saved</small></div>
-            {projects.filter(p => p.user_id === user.id).map(p => <div className="proj" key={p.id}><div><b>{p.name}</b><small>Updated {new Date(p.updated_at).toLocaleString('en-IN')}</small></div>
-              <div><button className="sm" onClick={() => edit(p)}>Edit</button> <button className="sm" onClick={() => openShare(p)}>Share</button> <button className="sm" onClick={() => dup(p)}>Duplicate</button> <button className="sm dark" onClick={() => del(p)}>Delete</button></div></div>)}
-            {!projects.some(p => p.user_id === user.id) && <small className="empty">No saved projects yet.</small>}
+          <div className="card"><div className="row"><h3>My Projects</h3><small>{projects.length} saved</small></div>
+            {projects.map(p => <div className="proj" key={p.id}><div><b>{p.name}</b><small>Updated {new Date(p.updated_at).toLocaleString('en-IN')}</small></div>
+              <div><button className="sm" onClick={() => edit(p)}>Edit</button> <button className="sm" onClick={() => dup(p)}>Duplicate</button> <button className="sm dark" onClick={() => del(p)}>Delete</button></div></div>)}
+            {!projects.length && <small className="empty">No saved projects yet.</small>}
           </div>
-          {projects.some(p => p.user_id !== user.id) && <div className="card"><div className="row"><h3>Shared with me</h3><small>{projects.filter(p => p.user_id !== user.id).length} shared</small></div>
-            {projects.filter(p => p.user_id !== user.id).map(p => <div className="proj" key={p.id}><div><b>{p.name}</b><small>Shared project · Updated {new Date(p.updated_at).toLocaleString('en-IN')}</small></div>
-              <div><button className="sm" onClick={() => edit(p)}>Edit</button> <button className="sm" onClick={() => dup(p)}>Duplicate</button></div></div>)}
-            </div>}
           <div className="card"><h3>Header</h3>
             <label>COMPANY LOGO (IMAGE)</label>
             <div className="logo-row"><div className="logo-box">{s.logo ? <img src={s.logo} /> : 'No logo'}</div>
@@ -303,17 +346,6 @@ export function Dashboard({ user }) {
         </div>
         <div className="right"><div className="lp">LIVE PREVIEW</div><div className="stage"><div ref={ref} className="preview" dangerouslySetInnerHTML={{ __html: cardHtml(s) }} /></div></div>
       </main>
-      {sharing && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSharing(null) }}>
-        <section className="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
-          <div className="row"><h3 id="share-title">Share “{sharing.name}”</h3><button className="sm dark" onClick={() => setSharing(null)}>Close</button></div>
-          <p className="share-help">Invite someone with an existing NewJoinees account. They’ll be able to view and edit this project.</p>
-          <form onSubmit={invite}><label htmlFor="share-email">EMAIL ADDRESS</label>
-            <div className="share-form"><input id="share-email" type="email" required value={shareEmail} onChange={e => setShareEmail(e.target.value)} placeholder="teammate@company.com" />
-              <button className="fill" disabled={sharingBusy}>{sharingBusy ? 'Sharing…' : 'Share'}</button></div></form>
-          <h4>People with access</h4>
-          {sharedWith.length ? <ul className="share-list">{sharedWith.map(share => <li key={share.id}><span>{share.shared_with_email}</span><button className="sm dark" onClick={() => revokeShare(share)}>Remove</button></li>)}</ul> : <p className="empty">Only you have access to this project.</p>}
-        </section>
-      </div>}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
